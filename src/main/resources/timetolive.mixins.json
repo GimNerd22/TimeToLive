@@ -3,8 +3,8 @@
   "minVersion": "0.8",
   "package": "schauweg.timetolive.mixin",
   "client": [
-    "WorldRendererMixin",
-    "CreeperEntityMixin"
+    "CreeperEntityMixin",
+    "WorldRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

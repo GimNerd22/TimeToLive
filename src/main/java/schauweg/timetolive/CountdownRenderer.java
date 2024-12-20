@@ -2,6 +2,7 @@ package schauweg.timetolive;
 
 import com.google.common.collect.Iterables;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.Frustum;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -10,9 +11,9 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.TntEntity;
 import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.util.math.Matrix4f;
-import net.minecraft.util.math.Quaternion;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import schauweg.timetolive.config.TTLConfigManger;
 import schauweg.timetolive.mixin.CreeperEntityMixin;
 
@@ -52,7 +53,7 @@ public class CountdownRenderer {
 
 
     @SuppressWarnings( "deprecation" )
-    private static void renderCountdown(Entity passedEntity, MatrixStack matrices, float partialTicks, Camera camera, Entity viewPoint, int fuse){
+    private static void renderCountdown(Entity passedEntity, MatrixStack matrices, float partialTicks, Camera camera, Entity viewPoint, int fuse) {
         MinecraftClient mc = MinecraftClient.getInstance();
 
         matrices.push();
@@ -64,8 +65,17 @@ public class CountdownRenderer {
         matrices.translate(x - renderManager.camera.getPos().x, y - renderManager.camera.getPos().y + passedEntity.getHeight() + 0.5F, z - renderManager.camera.getPos().z);
 
         VertexConsumerProvider.Immediate immediate = mc.getBufferBuilders().getEntityVertexConsumers();
-        Quaternion rotation = camera.getRotation().copy();
-        rotation.scale(-1.0F);
+        Quaternionf rotation = null;
+        try {
+            rotation = (Quaternionf) camera.getRotation().clone();
+        } catch (CloneNotSupportedException e) {
+
+        }
+
+        if (rotation == null) {
+            return;
+        }
+
         matrices.multiply(rotation);
 
         matrices.scale(-0.025F, -0.025F, 0.025F);
@@ -73,8 +83,8 @@ public class CountdownRenderer {
         String time = TTLConfigManger.getConfig().isDisplayInTicks() ? fuse + " t" : ticksToTime(fuse);
         float offset = (float)(-mc.textRenderer.getWidth(time)/2);
         Matrix4f modelViewMatrix = matrices.peek().getPositionMatrix();
-        mc.textRenderer.draw(time, offset, 0, 553648127, false, modelViewMatrix, immediate, true, 1056964608, 15728640);
-        mc.textRenderer.draw(time, offset, 0, -1, false, modelViewMatrix, immediate, false, 0, 15728640);
+        mc.textRenderer.draw(time, offset, 0, 553648127, false, modelViewMatrix, immediate, TextRenderer.TextLayerType.NORMAL, 1056964608, 15728640);
+        mc.textRenderer.draw(time, offset, 0, -1, false, modelViewMatrix, immediate, TextRenderer.TextLayerType.NORMAL, 0, 15728640);
 
         matrices.pop();
     }
