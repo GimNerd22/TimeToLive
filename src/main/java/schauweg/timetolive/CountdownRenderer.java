@@ -39,7 +39,7 @@ public class CountdownRenderer {
             } else if (entity instanceof CreeperEntity) {
                 if (((CreeperEntity) entity).isIgnited()) {
                     fuse = ((CreeperEntityMixin)entity).getFuseTime() - ((CreeperEntityMixin)entity).getCurrentFuseTime();
-                    matrices.translate(vec3d.x, vec3d.y + 2, vec3d.z);
+                    matrices.translate(vec3d.x, vec3d.y + entity.getHeight() + 0.5, vec3d.z);
                 }
             }
 
