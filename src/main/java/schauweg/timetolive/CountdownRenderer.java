@@ -1,92 +1,63 @@
 package schauweg.timetolive;
 
-import com.google.common.collect.Iterables;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.Frustum;
 import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.EntityRenderDispatcher;
+import net.minecraft.client.render.entity.EntityRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.TntEntity;
 import net.minecraft.entity.mob.CreeperEntity;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
-import org.joml.Quaternionf;
 import schauweg.timetolive.config.TTLConfigManger;
 import schauweg.timetolive.mixin.CreeperEntityMixin;
 
-import java.util.stream.StreamSupport;
-
 public class CountdownRenderer {
+    public static <E extends Entity> void renderCountdown(E entity, float tickDelta, MatrixStack matrices, VertexConsumerProvider immediate, EntityRenderer<? super E, ?> renderer) {
+        if (entity instanceof TntEntity || entity instanceof CreeperEntity) {
+            double x = MathHelper.lerp(tickDelta, entity.lastRenderX, entity.getX());
+            double y = MathHelper.lerp(tickDelta, entity.lastRenderY, entity.getY());
+            double z = MathHelper.lerp(tickDelta, entity.lastRenderZ, entity.getZ());
 
-    public static void render(MatrixStack matrices, float partialTicks, Camera camera, Matrix4f projection, Frustum capturedFrustum) {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if(mc.world == null || !MinecraftClient.isHudEnabled()) {
-            return;
-        }
-        final Entity cameraEntity = camera.getFocusedEntity() != null ? camera.getFocusedEntity() : mc.player; //possible fix for optifine (see https://github.com/UpcraftLP/Orderly/issues/3)
-        assert cameraEntity != null : "Camera Entity must not be null!";
+            Vec3d pos = new Vec3d(x, y, z);
 
-        Vec3d cameraPos = camera.getPos();
-        final Frustum frustum;
-        if(capturedFrustum != null) {
-            frustum = capturedFrustum;
-        }
-        else {
-            frustum = new Frustum(matrices.peek().getPositionMatrix(), projection);
-            frustum.setPosition(cameraPos.getX(), cameraPos.getY(), cameraPos.getZ());
-        }
+            MinecraftClient client = MinecraftClient.getInstance();
+            Camera camera = client.gameRenderer.getCamera();
 
-        StreamSupport.stream(mc.world.getEntities().spliterator(), false).filter(entity -> entity instanceof CreeperEntity && entity != cameraEntity && entity.isAlive() && Iterables.isEmpty(entity.getPassengersDeep()) && entity.shouldRender(cameraPos.getX(), cameraPos.getY(), cameraPos.getZ()) && (entity.ignoreCameraFrustum || frustum.isVisible(entity.getBoundingBox()))).map(CreeperEntity.class::cast).forEach(entity -> {
+            Vec3d vec3d = pos.subtract(camera.getPos());
 
-            if (entity.isIgnited()){
-                int fuse = ((CreeperEntityMixin)entity).getFuseTime() - ((CreeperEntityMixin)entity).getCurrentFuseTime();
-                renderCountdown(entity, matrices, partialTicks, camera, cameraEntity, fuse);
+            matrices.push();
+
+            int fuse = 0;
+
+            if (entity instanceof TntEntity) {
+                fuse = ((TntEntity) entity).getFuse();
+                matrices.translate(vec3d.x, vec3d.y + entity.getHeight() + 0.5, vec3d.z);
+            } else if (entity instanceof CreeperEntity) {
+                if (((CreeperEntity) entity).isIgnited()) {
+                    fuse = ((CreeperEntityMixin)entity).getFuseTime() - ((CreeperEntityMixin)entity).getCurrentFuseTime();
+                    matrices.translate(vec3d.x, vec3d.y + 2, vec3d.z);
+                }
             }
 
-        });
+            matrices.multiplyPositionMatrix(new Matrix4f().rotation(camera.getRotation()));
+            matrices.scale(0.025F, -0.025F, 0.025F);
+            Matrix4f matrix4f = matrices.peek().getPositionMatrix();
+            TextRenderer textRenderer = renderer.getTextRenderer();
 
-        StreamSupport.stream(mc.world.getEntities().spliterator(), false).filter(entity -> entity instanceof TntEntity && entity != cameraEntity && entity.isAlive() && Iterables.isEmpty(entity.getPassengersDeep()) && entity.shouldRender(cameraPos.getX(), cameraPos.getY(), cameraPos.getZ()) && (entity.ignoreCameraFrustum || frustum.isVisible(entity.getBoundingBox()))).map(TntEntity.class::cast).forEach(entity -> renderCountdown(entity, matrices, partialTicks, camera, cameraEntity, entity.getFuse()));
-    }
 
+            String time = TTLConfigManger.getConfig().isDisplayInTicks() ? fuse + " t" : ticksToTime(fuse);
 
-    @SuppressWarnings( "deprecation" )
-    private static void renderCountdown(Entity passedEntity, MatrixStack matrices, float partialTicks, Camera camera, Entity viewPoint, int fuse) {
-        MinecraftClient mc = MinecraftClient.getInstance();
+            float f = (float)(-textRenderer.getWidth(time)) / 2.0F;
 
-        matrices.push();
-        double x = passedEntity.prevX + (passedEntity.getX() - passedEntity.prevX) * partialTicks;
-        double y = passedEntity.prevY + (passedEntity.getY() - passedEntity.prevY) * partialTicks;
-        double z = passedEntity.prevZ + (passedEntity.getZ() - passedEntity.prevZ) * partialTicks;
+            textRenderer.draw(time, f, 0, 553648127, false, matrix4f, immediate, TextRenderer.TextLayerType.SEE_THROUGH, 1056964608, 15728640);
+            textRenderer.draw(time, f, 0, -1, false, matrix4f, immediate, TextRenderer.TextLayerType.NORMAL, 0, 15728640);
 
-        EntityRenderDispatcher renderManager = MinecraftClient.getInstance().getEntityRenderDispatcher();
-        matrices.translate(x - renderManager.camera.getPos().x, y - renderManager.camera.getPos().y + passedEntity.getHeight() + 0.5F, z - renderManager.camera.getPos().z);
-
-        VertexConsumerProvider.Immediate immediate = mc.getBufferBuilders().getEntityVertexConsumers();
-        Quaternionf rotation = null;
-        try {
-            rotation = (Quaternionf) camera.getRotation().clone();
-        } catch (CloneNotSupportedException e) {
-
+            matrices.pop();
         }
-
-        if (rotation == null) {
-            return;
-        }
-
-        matrices.multiply(rotation);
-
-        matrices.scale(-0.025F, -0.025F, 0.025F);
-
-        String time = TTLConfigManger.getConfig().isDisplayInTicks() ? fuse + " t" : ticksToTime(fuse);
-        float offset = (float)(-mc.textRenderer.getWidth(time)/2);
-        Matrix4f modelViewMatrix = matrices.peek().getPositionMatrix();
-        mc.textRenderer.draw(time, offset, 0, 553648127, false, modelViewMatrix, immediate, TextRenderer.TextLayerType.NORMAL, 1056964608, 15728640);
-        mc.textRenderer.draw(time, offset, 0, -1, false, modelViewMatrix, immediate, TextRenderer.TextLayerType.NORMAL, 0, 15728640);
-
-        matrices.pop();
     }
 
     private static String ticksToTime(int ticks){
